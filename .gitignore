@@ -1,0 +1,37 @@
+# NetSense+ Git Ignore
+
+# Binaries
+*.exe
+*.o
+*.a
+*.dll
+*.so
+
+# Build / Release folders
+release/
+build/
+bin/
+
+# Temporary / Log files
+*.log
+proxy/netsense_proxy.log
+recordings/
+*.tmp
+
+# SQLite Database
+*.db
+*.db-journal
+*.db-wal
+
+# Configuration
+netsense_settings.json
+
+# IDE / System
+.vscode/
+.idea/
+.vs/
+*.user
+*.suo
+.gemini/
+Thumbs.db
+Desktop.ini
