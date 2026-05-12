@@ -18,6 +18,7 @@
 #include "analysis/traffic_analyzer.h"
 #include "dns/dns_resolver.h"
 #include "ui/main_ui.h"
+#include "rules/rule_manager.h"
 #include <fstream>
 #include "third_party/json/json.hpp"
 
@@ -69,6 +70,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE,
 
     // 2. Load settings & Start background services
     LoadSettings();
+    RuleManager::Load();
     
     TrafficDB::Initialize(g_settings.dbPath);
     g_state.currentSessionId = TrafficDB::StartSession("Session - " + std::to_string(time(NULL)));

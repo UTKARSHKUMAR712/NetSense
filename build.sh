@@ -19,6 +19,7 @@ SRC_PROXY="core/proxy_reader.cpp"
 
 SRC_IMGUI="imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/imgui_widgets.cpp imgui/imgui_impl_glfw.cpp imgui/imgui_impl_opengl3.cpp"
 SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector_panel.cpp ui/panels/rules_panel.cpp ui/panels/session_panel.cpp ui/panels/mobile_panel.cpp ui/panels/settings_panel.cpp"
+SRC_RULES="rules/rule_manager.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 
 OUTPUT="NetSense.exe"
@@ -62,6 +63,7 @@ g++ "${FLAGS[@]}" \
     "$SRC_DB" \
     "$SRC_ANALYSIS" \
     "$OBJ_SQLITE" \
+    "$SRC_RULES" \
     $SRC_UI   \
     $SRC_IMGUI \
     "${LIBS[@]}" \
