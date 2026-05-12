@@ -22,6 +22,8 @@ SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector
 SRC_RULES="rules/rule_manager.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 SRC_SETTINGS="core/settings_persist.cpp"
+SRC_BACKEND="backend/runtime_health.cpp"
+SRC_UTILS="utils/structured_log.cpp"
 
 # ── Output layout ──────────────────────────────────────────
 RELEASE_DIR="release"
@@ -70,6 +72,8 @@ g++ "${FLAGS[@]}" \
     "$SRC_DB" \
     "$SRC_ANALYSIS" \
     "$SRC_SETTINGS" \
+    "$SRC_BACKEND" \
+    "$SRC_UTILS" \
     "$OBJ_SQLITE" \
     "$SRC_RULES" \
     $SRC_UI   \

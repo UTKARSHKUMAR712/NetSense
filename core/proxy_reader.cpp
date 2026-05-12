@@ -15,6 +15,8 @@
 #include "app_data.h"
 #include "proxy_reader.h"
 #include "traffic_db.h"
+#include "../backend/runtime_health.h"
+#include "../utils/time_utils.h"
 
 using json = nlohmann::json;
 
@@ -44,6 +46,8 @@ static void FlushPendingProxyLogs() {
 static std::atomic<bool> g_proxy_running{false};
 static std::thread       g_proxy_thread;
 
+
+static HANDLE g_hProxyProcess = NULL;
 
 static std::string FmtBytes5(long long b) {
     char buf[32];
@@ -164,7 +168,33 @@ static void ProxyLoop() {
             }
             f.clear(); // clear EOF again so next iteration can read
         }
-        Sleep(500); // 500ms for snappier real-time feel
+
+        // ── Heartbeat (health monitor) ─────────────────────────
+        RuntimeHealthMonitor::Heartbeat(SubsystemId::ProxyReader);
+
+        // ── Proxy crash recovery ───────────────────────────────
+        // Every 5s check if mitmdump.exe is still alive.
+        static double s_lastCrashCheck = 0.0;
+        double nowMs = TimeUtils::MonotonicMs();
+        if ((nowMs - s_lastCrashCheck) > 5000.0) {
+            s_lastCrashCheck = nowMs;
+            if (g_hProxyProcess != NULL) {
+                DWORD rc = WaitForSingleObject(g_hProxyProcess, 0);
+                if (rc == WAIT_OBJECT_0) {
+                    // Process has exited unexpectedly
+                    CloseHandle(g_hProxyProcess);
+                    g_hProxyProcess = NULL;
+                    ProxyLog("[PROXY] mitmdump process died — attempting auto-restart...");
+                    if (StartProxyServer()) {
+                        ProxyLog("[PROXY] Auto-restart successful.");
+                    } else {
+                        ProxyLog("[PROXY ERROR] Auto-restart FAILED. Check Settings > Proxy.");
+                    }
+                }
+            }
+        }
+
+        Sleep(500);
     }
     
     if(f.is_open()) f.close();
@@ -178,9 +208,6 @@ void StopProxyReader() {
     g_proxy_running = false;
     if(g_proxy_thread.joinable()) g_proxy_thread.join();
 }
-
-static HANDLE g_hProxyProcess = NULL;
-
 
 bool StartProxyServer() {
     if (g_hProxyProcess != NULL) return true;
