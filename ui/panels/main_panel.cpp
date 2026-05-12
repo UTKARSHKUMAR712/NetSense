@@ -384,6 +384,12 @@ void RenderMainPanel() {
             g_state.mtx.lock();
             ImGui::EndTabItem();
         }
+        if (ImGui::BeginTabItem("[RT] Runtime")) {
+            g_state.mtx.unlock();
+            RenderRuleRuntimePanel();
+            g_state.mtx.lock();
+            ImGui::EndTabItem();
+        }
         if (ImGui::BeginTabItem("[SESSION] History")) {
             g_state.mtx.unlock();
             RenderSessionPanel();

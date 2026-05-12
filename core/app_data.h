@@ -103,9 +103,16 @@ struct AppSettings {
     std::string dbPath         = "netsense.db";
 
     // UI
-    int    themeIndex          = 0;       // 0 = Cyber Dark, 1 = Minimal
+    int    themeIndex          = 0;
     float  uiScale             = 1.0f;
+
+    // Proxy path — empty = auto-detect mitmdump.exe alongside NetSense.exe
+    std::string mitmdumpPath   = "";
 };
+
+// Persist settings across restarts
+void LoadSettings();
+void SaveSettings();
 
 struct AppState {
     std::mutex                    mtx;

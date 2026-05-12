@@ -32,8 +32,19 @@ void Load() {
             r.stopProcessing = item.value("stop", false);
             r.description = item.value("description", "");
             r.category    = item.value("category", "Custom");
-            // hitCount is runtime-only; seed it from saved file if present
             r.hitCount    = item.value("hit_count", 0);
+            // Load advanced config block
+            if (item.contains("config") && item["config"].is_object()) {
+                for (auto& [k, v] : item["config"].items()) {
+                    r.config[k] = v.is_string() ? v.get<std::string>() : v.dump();
+                }
+            }
+            // Load conditions block
+            if (item.contains("conditions") && item["conditions"].is_object()) {
+                for (auto& [k, v] : item["conditions"].items()) {
+                    r.conditions[k] = v.is_string() ? v.get<std::string>() : v.dump();
+                }
+            }
             g_rules.push_back(r);
         }
         // Sort by priority ascending
@@ -61,6 +72,18 @@ void Save() {
         item["description"] = r.description;
         item["category"]    = r.category;
         item["hit_count"]   = r.hitCount;
+        // Serialize config block
+        if (!r.config.empty()) {
+            nlohmann::json cfg = nlohmann::json::object();
+            for (const auto& [k, v] : r.config) cfg[k] = v;
+            item["config"] = cfg;
+        }
+        // Serialize conditions block
+        if (!r.conditions.empty()) {
+            nlohmann::json cond = nlohmann::json::object();
+            for (const auto& [k, v] : r.conditions) cond[k] = v;
+            item["conditions"] = cond;
+        }
         j.push_back(item);
         idx++;
     }

@@ -26,34 +26,9 @@
 AppState g_state;
 AppSettings g_settings;
 
-// ─── WinMain ────────────────────────────────────────────────
-void LoadSettings() {
-    std::ifstream f("netsense_settings.json");
-    if (f.is_open()) {
-        try {
-            nlohmann::json j;
-            f >> j;
-            if (j.contains("proxyPort")) g_settings.proxyPort = j["proxyPort"];
-            if (j.contains("enableBodyPreview")) g_settings.enableBodyPreview = j["enableBodyPreview"];
-            if (j.contains("storeFormData")) g_settings.storeFormData = j["storeFormData"];
-            if (j.contains("encryptSensitiveFields")) g_settings.encryptSensitiveFields = j["encryptSensitiveFields"];
-            if (j.contains("uiScale")) g_settings.uiScale = j["uiScale"];
-        } catch(...) {}
-    }
-}
+// LoadSettings / SaveSettings — defined in core/settings_persist.cpp
+// They use GetModuleFileNameA to store settings.json next to NetSense.exe.
 
-void SaveSettings() {
-    try {
-        nlohmann::json j;
-        j["proxyPort"] = g_settings.proxyPort;
-        j["enableBodyPreview"] = g_settings.enableBodyPreview;
-        j["storeFormData"] = g_settings.storeFormData;
-        j["encryptSensitiveFields"] = g_settings.encryptSensitiveFields;
-        j["uiScale"] = g_settings.uiScale;
-        std::ofstream f("netsense_settings.json");
-        f << j.dump(4);
-    } catch(...) {}
-}
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE,
                    LPSTR, int nCmdShow)

@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <map>
 #include <atomic>
 
 // All supported rule types — kept in sync with netsense_addon.py
@@ -38,19 +39,30 @@ static constexpr const char* MATCH_MODES[] = {
 static constexpr int MATCH_MODE_COUNT = 11;
 
 struct TrafficRule {
-    std::string id;          // UUID or index-based ID for cross-referencing
-    std::string type   = "BLOCK";
-    std::string match  = "domain";
+    std::string id;
+    std::string type    = "BLOCK";
+    std::string match   = "domain";
     std::string pattern = "";
-    std::string key    = "";    // header key, JSON path, etc.
-    std::string value  = "";    // replacement value / inject value
+    std::string key     = "";   // header key (simple rules)
+    std::string value   = "";   // replace value (simple rules)
     bool        enabled = true;
-    int         priority = 0;   // lower number = higher priority
-    bool        stopProcessing = false; // stop evaluating rules after this one hits
-    std::string description = "";       // human-readable description
-    std::string category = "";          // e.g. "Privacy", "Gaming"
+    int         priority = 0;
+    bool        stopProcessing = false;
+    std::string description = "";
+    std::string category    = "";
 
-    // Live stats (runtime only, not persisted)
-    int         hitCount  = 0;
-    double      lastHitTs = 0.0;
+    // Advanced type-specific config (serialized to JSON "config" block)
+    // Examples: {"latency_ms":"500"}, {"json_path":"user.isPremium","replace_value":"true"}
+    std::map<std::string, std::string> config;
+
+    // Pre-conditions (serialized to JSON "conditions" block)
+    // Examples: {"mime":"application/json"}, {"status":"200", "process":"chrome.exe"}
+    std::map<std::string, std::string> conditions;
+
+    // Runtime stats (not persisted)
+    int    hitCount  = 0;
+    double lastHitTs = 0.0;
+
+    // UI state (not persisted)
+    bool   expanded = false;
 };

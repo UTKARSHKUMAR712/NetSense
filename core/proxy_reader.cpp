@@ -156,34 +156,64 @@ static HANDLE g_hProxyProcess = NULL;
 
 
 bool StartProxyServer() {
-    if (g_hProxyProcess != NULL) return true; // Already running
+    if (g_hProxyProcess != NULL) return true;
 
     char exePath[MAX_PATH];
     GetModuleFileNameA(nullptr, exePath, MAX_PATH);
     std::string dir(exePath);
     auto slash = dir.rfind('\\');
-    if(slash != std::string::npos) dir.resize(slash+1);
-    
-    // Ensure proxy directory exists
+    if (slash != std::string::npos) dir.resize(slash + 1);
+
+    // Ensure runtime dirs exist
     CreateDirectoryA((dir + "proxy").c_str(), NULL);
-    // Use the standalone python addon from the proxy/ folder
-    std::string scriptPath = dir + "proxy\\netsense_addon.py";
-    
-    // mitmdump command using absolute path to the executable
-    std::string mitmPath = dir + "release\\mitmdump.exe";
-    if (GetFileAttributesA(mitmPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        mitmPath = dir + "mitmdump.exe"; // Fallback if it's in root
+    CreateDirectoryA((dir + "recordings").c_str(), NULL);
+
+    // ── Resolve mitmdump.exe ──────────────────────────────────
+    // Priority 1: user-supplied path from Settings
+    std::string mitmPath = g_settings.mitmdumpPath;
+
+    // Priority 2: auto-detect mitmdump.exe alongside NetSense.exe
+    if (mitmPath.empty() ||
+        GetFileAttributesA(mitmPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        mitmPath = dir + "mitmdump.exe";
     }
-    
-    std::string cmd = "\"" + mitmPath + "\" --listen-port " + std::to_string(g_settings.proxyPort) + " -s \"" + scriptPath + "\"";
+    // Priority 3: mitmproxy.exe (alternate install name)
+    if (GetFileAttributesA(mitmPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        mitmPath = dir + "mitmproxy.exe";
+    }
+    // Not found — emit actionable error
+    if (GetFileAttributesA(mitmPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        g_state.addLog("[PROXY ERROR] mitmdump.exe not found at: " + dir + "mitmdump.exe");
+        g_state.addLog("[PROXY ERROR] Set path manually in Settings > Proxy > mitmdump Path.");
+        return false;
+    }
+
+    // ── Resolve addon script ──────────────────────────────────
+    std::string scriptPath = dir + "proxy\\netsense_addon.py";
+    if (GetFileAttributesA(scriptPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        g_state.addLog("[PROXY ERROR] netsense_addon.py not found at: " + scriptPath);
+        return false;
+    }
+
+    g_state.addLog("[PROXY] mitmdump : " + mitmPath);
+    g_state.addLog("[PROXY] addon    : " + scriptPath);
+
+    std::string cmd = "\"" + mitmPath + "\" --listen-port "
+                    + std::to_string(g_settings.proxyPort)
+                    + " -s \"" + scriptPath + "\"";
 
     STARTUPINFOA si = {sizeof(STARTUPINFOA)};
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;  // Hide the console window
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi = {};
 
-    if (!CreateProcessA(NULL, (LPSTR)cmd.c_str(), NULL, NULL, FALSE, 
+    if (!CreateProcessA(NULL, (LPSTR)cmd.c_str(), NULL, NULL, FALSE,
                         CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        DWORD err = GetLastError();
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+                 "[PROXY ERROR] CreateProcess failed (err=%lu). Check mitmdump path.", err);
+        g_state.addLog(buf);
         return false;
     }
 

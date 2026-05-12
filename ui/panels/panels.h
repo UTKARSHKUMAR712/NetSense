@@ -6,3 +6,4 @@ void RenderRulesPanel();
 void RenderSessionPanel();
 void RenderMobilePanel();
 void RenderSettingsPanel();
+void RenderRuleRuntimePanel();

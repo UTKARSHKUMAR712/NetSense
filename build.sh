@@ -18,11 +18,17 @@ SRC_MAIN="main.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 
 SRC_IMGUI="imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/imgui_widgets.cpp imgui/imgui_impl_glfw.cpp imgui/imgui_impl_opengl3.cpp"
-SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector_panel.cpp ui/panels/rules_panel.cpp ui/panels/session_panel.cpp ui/panels/mobile_panel.cpp ui/panels/settings_panel.cpp"
+SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector_panel.cpp ui/panels/rules_panel.cpp ui/panels/rule_editor_modal.cpp ui/panels/rule_runtime_panel.cpp ui/panels/session_panel.cpp ui/panels/mobile_panel.cpp ui/panels/settings_panel.cpp"
 SRC_RULES="rules/rule_manager.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
+SRC_SETTINGS="core/settings_persist.cpp"
 
-OUTPUT="NetSense.exe"
+# ── Output layout ──────────────────────────────────────────
+RELEASE_DIR="release"
+OUTPUT="${RELEASE_DIR}/NetSense.exe"
+
+mkdir -p "${RELEASE_DIR}/proxy"
+mkdir -p "${RELEASE_DIR}/recordings"
 
 FLAGS=(
   -std=c++20
@@ -44,6 +50,7 @@ LIBS=(
   -lpsapi
   -lgdi32
   -lcomctl32
+  -lcomdlg32
   -luser32
   -lkernel32
   -lglfw3
@@ -62,6 +69,7 @@ g++ "${FLAGS[@]}" \
     "$SRC_PROXY" \
     "$SRC_DB" \
     "$SRC_ANALYSIS" \
+    "$SRC_SETTINGS" \
     "$OBJ_SQLITE" \
     "$SRC_RULES" \
     $SRC_UI   \
@@ -71,4 +79,34 @@ g++ "${FLAGS[@]}" \
 
 echo "[+] Build successful: $OUTPUT"
 rm -f "$OBJ_SQLITE"
-echo "[!] Run as Administrator for full packet access."
+
+# ── Copy runtime files into release/ ───────────────────────
+echo "[*] Copying proxy runtime files to ${RELEASE_DIR}/proxy/ ..."
+cp -u proxy/netsense_addon.py    "${RELEASE_DIR}/proxy/"
+cp -u proxy/rule_engine.py       "${RELEASE_DIR}/proxy/"
+cp -u proxy/predefined_packs.json "${RELEASE_DIR}/proxy/"
+# rules.json is generated at runtime; seed with empty array if missing
+[ -f "${RELEASE_DIR}/proxy/rules.json" ] || echo "[]" > "${RELEASE_DIR}/proxy/rules.json"
+
+# Copy mitmdump.exe if present in project root (common location after pip install)
+if [ -f "mitmdump.exe" ]; then
+    cp -u mitmdump.exe "${RELEASE_DIR}/"
+    echo "[*] Copied mitmdump.exe -> ${RELEASE_DIR}/mitmdump.exe"
+fi
+
+echo ""
+echo "========================================="
+echo "  Release layout:"
+echo "  ${RELEASE_DIR}/"
+echo "    NetSense.exe          <- main app"
+echo "    mitmdump.exe          <- mitmproxy (place here)"
+echo "    proxy/"
+echo "      netsense_addon.py   <- mitmproxy addon"
+echo "      rule_engine.py      <- rule execution"
+echo "      rules.json          <- live rules (auto-generated)"
+echo "      predefined_packs.json"
+echo "      netsense_proxy.log  <- written at runtime"
+echo "      netsense_alerts.log <- written at runtime"
+echo "    recordings/           <- session exports"
+echo "========================================="
+echo "[!] Run NetSense.exe as Administrator for full packet access."

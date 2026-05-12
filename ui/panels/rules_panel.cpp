@@ -7,6 +7,13 @@
 #include <vector>
 #include <string>
 #include <ctime>
+#include <algorithm>
+
+// Forward-declare to avoid circular includes
+void InvalidateRuleCache();
+void OpenRuleEditorModal(int idx);
+void RenderRuleEditorModal();
+
 
 // ──────────────────────────────────────────────────────────────
 //  Predefined pack data (loaded from proxy/predefined_packs.json)
@@ -50,21 +57,62 @@ static void LoadPredefinedPacks() {
 
 // Import all rules from a pack into the live custom rules list
 static void ImportPackIntoCustomRules(const PredefPack& pack) {
-    for (const auto& r : pack.rules) {
-        TrafficRule rule;
-        rule.id          = pack.id + "_" + std::to_string(RuleManager::g_rules.size());
-        rule.type        = r.value("type", "BLOCK");
-        rule.match       = r.value("match", "domain");
-        rule.pattern     = r.value("pattern", "");
-        rule.key         = r.value("key", "");
-        rule.value       = r.value("value", "");
-        rule.description = r.value("description", "");
-        rule.category    = pack.category;
-        rule.enabled     = true;
-        rule.priority    = 50;
-        RuleManager::g_rules.push_back(rule);
-    }
+    {
+        std::lock_guard<std::mutex> lk(RuleManager::g_rulesMtx);
+        for (const auto& r : pack.rules) {
+            TrafficRule rule;
+            rule.id          = pack.id + "_" + std::to_string(RuleManager::g_rules.size());
+            rule.type        = r.value("type", "BLOCK");
+            rule.match       = r.value("match", "domain");
+            rule.pattern     = r.value("pattern", "");
+            rule.key         = r.value("key", "");
+            rule.value       = r.value("value", "");
+            rule.description = r.value("description", "");
+            rule.category    = pack.category;
+            rule.enabled     = true;
+            rule.priority    = 50;
+            RuleManager::g_rules.push_back(rule);
+        }
+    } // ← lock released BEFORE Save() to avoid double-lock deadlock
     RuleManager::Save();
+}
+
+
+// Called when a pack is toggled — writes custom rules + ALL enabled pack rules
+// to rules.json so the Python engine sees them immediately.
+static void OnPackToggled() {
+    // 1. Collect custom rules via RuleManager::Save() first
+    RuleManager::Save();
+
+    // 2. Reload what was just saved, then append enabled pack rules
+    static const char* RULES_FILE = "proxy/rules.json";
+    nlohmann::json j = nlohmann::json::array();
+
+    // Read existing custom rules
+    {
+        std::ifstream fi(RULES_FILE);
+        if (fi.is_open()) {
+            try { fi >> j; } catch (...) { j = nlohmann::json::array(); }
+        }
+    }
+
+    // Append every rule from every enabled pack
+    for (const auto& pack : g_packs) {
+        if (!pack.enabled) continue;
+        for (auto rule : pack.rules) {
+            // Tag with pack origin so the runtime panel can show it
+            if (!rule.contains("id") || rule["id"].get<std::string>().empty())
+                rule["id"] = pack.id + "_" + rule.value("type", "rule");
+            rule["category"] = pack.id;
+            rule["enabled"]  = true;
+            rule["priority"] = rule.value("priority", 10);
+            j.push_back(rule);
+        }
+    }
+
+    // Write the merged list
+    std::ofstream fo(RULES_FILE);
+    if (fo.is_open()) fo << j.dump(4);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -109,6 +157,7 @@ static void RenderCustomRulesTab() {
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.6f, 0.3f, 1.0f));
     if (ImGui::Button("+ Add Rule")) {
+        std::lock_guard<std::mutex> lk(RuleManager::g_rulesMtx);
         TrafficRule r;
         r.id = "rule_" + std::to_string(time(nullptr));
         RuleManager::g_rules.push_back(r);
@@ -125,24 +174,25 @@ static void RenderCustomRulesTab() {
 
     ImGui::Separator();
 
-    // Table
+    static int g_pendingEdit = -1;  // deferred Edit index (set inside table, opened after)
+
     ImGui::BeginChild("CustomRulesChild", ImVec2(0, 0), true);
-    const int COLS = 9;
+
+    // Compact summary table — no Key/Value overload
+    const int COLS = 8;
     if (ImGui::BeginTable("CustomRulesTable", COLS,
             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
-            ImGuiTableFlags_ScrollX)) {
+            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY)) {
 
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("##en",      ImGuiTableColumnFlags_WidthFixed,   30.0f);
-        ImGui::TableSetupColumn("Pri",       ImGuiTableColumnFlags_WidthFixed,   35.0f);
-        ImGui::TableSetupColumn("Type",      ImGuiTableColumnFlags_WidthFixed,  160.0f);
-        ImGui::TableSetupColumn("Match",     ImGuiTableColumnFlags_WidthFixed,  110.0f);
-        ImGui::TableSetupColumn("Pattern",   ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Key",       ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Value",     ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Hits",      ImGuiTableColumnFlags_WidthFixed,   45.0f);
-        ImGui::TableSetupColumn("Actions",   ImGuiTableColumnFlags_WidthFixed,   90.0f);
+        ImGui::TableSetupColumn("##en",     ImGuiTableColumnFlags_WidthFixed,  28.0f);
+        ImGui::TableSetupColumn("Pri",      ImGuiTableColumnFlags_WidthFixed,  40.0f);
+        ImGui::TableSetupColumn("Type",     ImGuiTableColumnFlags_WidthFixed, 165.0f);
+        ImGui::TableSetupColumn("Match",    ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        ImGui::TableSetupColumn("Pattern",  ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Hits",     ImGuiTableColumnFlags_WidthFixed,  40.0f);
+        ImGui::TableSetupColumn("Config",   ImGuiTableColumnFlags_WidthFixed,  65.0f);
+        ImGui::TableSetupColumn("Actions",  ImGuiTableColumnFlags_WidthFixed,  75.0f);
         ImGui::TableHeadersRow();
 
         int deleteIdx = -1;
@@ -153,18 +203,16 @@ static void RenderCustomRulesTab() {
         for (int i = 0; i < (int)RuleManager::g_rules.size(); ++i) {
             auto& r = RuleManager::g_rules[i];
             ImGui::PushID(i);
+
             ImGui::TableNextRow();
 
-            // Enabled toggle
             ImGui::TableSetColumnIndex(0);
             ImGui::Checkbox("##en", &r.enabled);
 
-            // Priority
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN);
             ImGui::InputInt("##pri", &r.priority, 0, 0);
 
-            // Type (colored combo)
             ImGui::TableSetColumnIndex(2);
             ImGui::SetNextItemWidth(-FLT_MIN);
             int cur_type = 0;
@@ -175,7 +223,6 @@ static void RenderCustomRulesTab() {
                 r.type = RULE_TYPES[cur_type];
             ImGui::PopStyleColor();
 
-            // Match mode
             ImGui::TableSetColumnIndex(3);
             ImGui::SetNextItemWidth(-FLT_MIN);
             int cur_match = 0;
@@ -184,7 +231,6 @@ static void RenderCustomRulesTab() {
             if (ImGui::Combo("##match", &cur_match, MATCH_MODES, MATCH_MODE_COUNT))
                 r.match = MATCH_MODES[cur_match];
 
-            // Pattern
             ImGui::TableSetColumnIndex(4);
             ImGui::SetNextItemWidth(-FLT_MIN);
             char patBuf[256] = {}; strncpy(patBuf, r.pattern.c_str(), 255);
@@ -192,30 +238,22 @@ static void RenderCustomRulesTab() {
             if (!r.description.empty() && ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", r.description.c_str());
 
-            // Key
             ImGui::TableSetColumnIndex(5);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            char keyBuf[128] = {}; strncpy(keyBuf, r.key.c_str(), 127);
-            if (ImGui::InputText("##key", keyBuf, sizeof(keyBuf))) r.key = keyBuf;
-
-            // Value
-            ImGui::TableSetColumnIndex(6);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            char valBuf[256] = {}; strncpy(valBuf, r.value.c_str(), 255);
-            if (ImGui::InputText("##val", valBuf, sizeof(valBuf))) r.value = valBuf;
-
-            // Hit counter (colour-coded: green if hits, grey if 0)
-            ImGui::TableSetColumnIndex(7);
             if (r.hitCount > 0)
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), "%d", r.hitCount);
+                ImGui::TextColored(ImVec4(0.3f,1.0f,0.5f,1.0f), "%d", r.hitCount);
             else
                 ImGui::TextDisabled("0");
 
-            // Actions: Duplicate + Delete
-            ImGui::TableSetColumnIndex(8);
+            ImGui::TableSetColumnIndex(6);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f,0.45f,0.8f,1.0f));
+            if (ImGui::SmallButton("> Edit"))
+                g_pendingEdit = i;  // defer: open popup after EndTable
+            ImGui::PopStyleColor();
+
+            ImGui::TableSetColumnIndex(7);
             if (ImGui::SmallButton("Dup")) dupIdx = i;
             ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f,0.15f,0.15f,1.0f));
             if (ImGui::SmallButton("X")) deleteIdx = i;
             ImGui::PopStyleColor();
 
@@ -224,8 +262,7 @@ static void RenderCustomRulesTab() {
 
         if (dupIdx != -1) {
             TrafficRule copy = RuleManager::g_rules[dupIdx];
-            copy.id += "_dup";
-            copy.hitCount = 0;
+            copy.id += "_dup"; copy.hitCount = 0; copy.expanded = false;
             RuleManager::g_rules.insert(RuleManager::g_rules.begin() + dupIdx + 1, copy);
         }
         if (deleteIdx != -1)
@@ -233,8 +270,17 @@ static void RenderCustomRulesTab() {
 
         ImGui::EndTable();
     }
+
+    // Open deferred popup here — same window context as BeginPopupModal
+    if (g_pendingEdit >= 0) {
+        OpenRuleEditorModal(g_pendingEdit);
+        g_pendingEdit = -1;
+    }
+    RenderRuleEditorModal();
     ImGui::EndChild();
 }
+
+
 
 // ──────────────────────────────────────────────────────────────
 //  Predefined Packs Sub-Tab
@@ -246,9 +292,9 @@ static void RenderPredefinedPacksTab() {
     ImGui::SameLine(ImGui::GetWindowWidth() - 300);
     if (ImGui::Button("Reload Packs")) { g_packsLoaded = false; LoadPredefinedPacks(); }
     ImGui::SameLine();
-    if (ImGui::Button("Enable All")) for (auto& p : g_packs) p.enabled = true;
+    if (ImGui::Button("Enable All"))  { for (auto& p : g_packs) p.enabled = true;  OnPackToggled(); }
     ImGui::SameLine();
-    if (ImGui::Button("Disable All")) for (auto& p : g_packs) p.enabled = false;
+    if (ImGui::Button("Disable All")) { for (auto& p : g_packs) p.enabled = false; OnPackToggled(); }
 
     ImGui::SetNextItemWidth(250);
     ImGui::InputText("Search##packs", g_packSearch, sizeof(g_packSearch));
@@ -269,13 +315,21 @@ static void RenderPredefinedPacksTab() {
 
         // Pack header row
         ImGui::PushID(pack.id.c_str());
-        ImGui::Checkbox("##en", &pack.enabled);
+        bool prevEnabled = pack.enabled;
+        if (ImGui::Checkbox("##en", &pack.enabled) && pack.enabled != prevEnabled) {
+            OnPackToggled();
+        }
         ImGui::SameLine();
         ImGui::TextColored(catCol, "[%s]", pack.category.c_str());
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1, 1, 1, 1), "%s", pack.name.c_str());
         ImGui::SameLine();
         ImGui::TextDisabled("(%zu rules)", pack.rules.size());
+        ImGui::SameLine();
+        if (pack.enabled)
+            ImGui::TextColored(ImVec4(0.1f,0.9f,0.3f,1.0f), " [ACTIVE]");
+        else
+            ImGui::TextDisabled(" [OFF]");
         if (pack.hitCount > 0) {
             ImGui::SameLine();
             ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), "  Hits: %d", pack.hitCount);
