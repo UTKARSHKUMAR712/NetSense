@@ -18,8 +18,32 @@
 
 using json = nlohmann::json;
 
+// ── Proxy-startup pending log (posted to g_state NEXT frame) ──
+// StartProxyServer() cannot call ProxyLog() while the UI holds
+// g_state.mtx.  Messages are queued here and flushed by the proxy reader.
+static std::mutex              g_pendingLogMtx;
+static std::vector<std::string> g_pendingLogs;
+
+static void ProxyLog(const std::string& msg) {
+    // Also emit to VS/MSYS2 debug output for immediate visibility
+    OutputDebugStringA((msg + "\n").c_str());
+    std::lock_guard<std::mutex> lk(g_pendingLogMtx);
+    g_pendingLogs.push_back(msg);
+}
+
+// Called from ProxyLoop (background thread) — safe to lock g_state.mtx here
+static void FlushPendingProxyLogs() {
+    std::vector<std::string> tmp;
+    {
+        std::lock_guard<std::mutex> lk(g_pendingLogMtx);
+        tmp.swap(g_pendingLogs);
+    }
+    for (auto& m : tmp) ProxyLog(m);
+}
+
 static std::atomic<bool> g_proxy_running{false};
 static std::thread       g_proxy_thread;
+
 
 static std::string FmtBytes5(long long b) {
     char buf[32];
@@ -50,6 +74,9 @@ static void ProxyLoop() {
     openAndSeekEnd();
 
     while(g_proxy_running) {
+        // Flush any log messages queued by StartProxyServer() (UI-safe)
+        FlushPendingProxyLogs();
+
         if(!f.is_open()) {
             openAndSeekEnd();
         }
@@ -128,7 +155,7 @@ static void ProxyLoop() {
                     }
                     
                     if(!entry.empty()) {
-                        g_state.addLog(entry);
+                        ProxyLog(entry);
                     }
                     
                 } catch(...) {
@@ -183,20 +210,20 @@ bool StartProxyServer() {
     }
     // Not found — emit actionable error
     if (GetFileAttributesA(mitmPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        g_state.addLog("[PROXY ERROR] mitmdump.exe not found at: " + dir + "mitmdump.exe");
-        g_state.addLog("[PROXY ERROR] Set path manually in Settings > Proxy > mitmdump Path.");
+        ProxyLog("[PROXY ERROR] mitmdump.exe not found at: " + dir + "mitmdump.exe");
+        ProxyLog("[PROXY ERROR] Set path manually in Settings > Proxy > mitmdump Path.");
         return false;
     }
 
     // ── Resolve addon script ──────────────────────────────────
     std::string scriptPath = dir + "proxy\\netsense_addon.py";
     if (GetFileAttributesA(scriptPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        g_state.addLog("[PROXY ERROR] netsense_addon.py not found at: " + scriptPath);
+        ProxyLog("[PROXY ERROR] netsense_addon.py not found at: " + scriptPath);
         return false;
     }
 
-    g_state.addLog("[PROXY] mitmdump : " + mitmPath);
-    g_state.addLog("[PROXY] addon    : " + scriptPath);
+    ProxyLog("[PROXY] mitmdump : " + mitmPath);
+    ProxyLog("[PROXY] addon    : " + scriptPath);
 
     std::string cmd = "\"" + mitmPath + "\" --listen-port "
                     + std::to_string(g_settings.proxyPort)
@@ -213,7 +240,7 @@ bool StartProxyServer() {
         char buf[256];
         snprintf(buf, sizeof(buf),
                  "[PROXY ERROR] CreateProcess failed (err=%lu). Check mitmdump path.", err);
-        g_state.addLog(buf);
+        ProxyLog(buf);
         return false;
     }
 
