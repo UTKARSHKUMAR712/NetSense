@@ -44,6 +44,30 @@ struct ProcessEntry {
     uint64_t    bpsOut    = 0;   // bytes/sec upload
 };
 
+struct CatcherData {
+    std::string username;
+    std::string password;
+    std::string bearerToken;
+    std::string authCookies;
+};
+
+struct FlowInsight {
+    bool isAPI = false;
+    bool isStream = false;
+    bool isTracker = false;
+    bool isAuth = false;
+    bool isMedia = false;
+    bool isSuspicious = false;
+
+    std::string apiType;
+    std::string mime;
+    std::string authType;
+    std::string riskLevel;
+    
+    CatcherData vaultPayload;
+    std::vector<std::string> tags;
+};
+
 struct ProxyFlow {
     std::string id;              // flow UUID from Python
     double      ts;              // unix timestamp
@@ -73,6 +97,9 @@ struct ProxyFlow {
     std::string ws_message;
     int         ws_opcode = -1;
     long long   bandwidth_bps = 0;
+    
+    // NetSense+ 3.0 Flow Intelligence
+    FlowInsight insight;
 };
 
 struct AppSettings {
@@ -93,6 +120,14 @@ struct AppSettings {
     bool   encryptSensitiveFields = false;
     bool   storeCookies           = false; // OFF by default
     bool   storeFormData          = false; // OFF by default
+
+    // NetSense+ 3.0 Performance & Inspection Toggles
+    bool   enableStreamDetection   = true;
+    bool   enableApiDetection      = true;
+    bool   enableTrackerAnalysis   = true;
+    bool   enableAuthDetection     = true;
+    bool   enableWebsocketInspection = true;
+    bool   enableDeepBodyParsing   = false;
 
     // Performance
     int    maxLiveFlows        = 2000;    // ring buffer size

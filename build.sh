@@ -11,14 +11,14 @@ SRC_CORE="core/network_monitor.cpp"
 SRC_DNS="dns/dns_resolver.cpp"
 SRC_PROC="process/process_mapper.cpp"
 SRC_DB="core/traffic_db.cpp"
-SRC_ANALYSIS="analysis/traffic_analyzer.cpp"
+SRC_ANALYSIS="analysis/traffic_analyzer.cpp analysis/flow_pipeline.cpp analysis/domain_cache.cpp"
 SRC_SQLITE="third_party/sqlite/sqlite3.c"
 OBJ_SQLITE="sqlite3.o"
 SRC_MAIN="main.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 
 SRC_IMGUI="imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/imgui_widgets.cpp imgui/imgui_impl_glfw.cpp imgui/imgui_impl_opengl3.cpp"
-SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector_panel.cpp ui/panels/rules_panel.cpp ui/panels/rule_editor_modal.cpp ui/panels/rule_runtime_panel.cpp ui/panels/session_panel.cpp ui/panels/settings_panel.cpp"
+SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector_panel.cpp ui/panels/rules_panel.cpp ui/panels/rule_editor_modal.cpp ui/panels/rule_runtime_panel.cpp ui/panels/session_panel.cpp ui/panels/settings_panel.cpp ui/panels/catcher_panel.cpp"
 SRC_RULES="rules/rule_manager.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 SRC_SETTINGS="core/settings_persist.cpp"
@@ -70,7 +70,7 @@ g++ "${FLAGS[@]}" \
     "$SRC_PROC" \
     "$SRC_PROXY" \
     "$SRC_DB" \
-    "$SRC_ANALYSIS" \
+    $SRC_ANALYSIS \
     "$SRC_SETTINGS" \
     "$SRC_BACKEND" \
     "$SRC_UTILS" \

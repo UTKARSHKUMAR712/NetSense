@@ -7,3 +7,4 @@ void RenderSessionPanel();
 
 void RenderSettingsPanel();
 void RenderRuleRuntimePanel();
+void RenderCatcherPanel();

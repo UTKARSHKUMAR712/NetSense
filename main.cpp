@@ -16,6 +16,7 @@
 #include "core/proxy_reader.h"
 #include "core/traffic_db.h"
 #include "analysis/traffic_analyzer.h"
+#include "analysis/flow_pipeline.h"
 #include "dns/dns_resolver.h"
 #include "ui/main_ui.h"
 #include "rules/rule_manager.h"
@@ -46,8 +47,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE,
     // 2. Load settings & Start background services
     LoadSettings();
     RuleManager::Load();
-    
     TrafficDB::Initialize(g_settings.dbPath);
+    FlowPipeline::Initialize();
     g_state.currentSessionId = TrafficDB::StartSession("Session - " + std::to_string(time(NULL)));
     StartDnsResolver();
     StartNetworkMonitor();

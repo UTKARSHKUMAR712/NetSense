@@ -15,6 +15,7 @@
 #include "app_data.h"
 #include "proxy_reader.h"
 #include "traffic_db.h"
+#include "../analysis/flow_pipeline.h"
 #include "../backend/runtime_health.h"
 #include "../utils/time_utils.h"
 
@@ -136,7 +137,9 @@ static void ProxyLoop() {
                             flow.bandwidth_bps = (long long)(((double)(flow.req_size + flow.rsp_size)) / (flow.duration_ms / 1000.0));
                         }
                     }
-                    
+                    // Execute pipeline on the background thread before storing
+                    FlowPipeline::ProcessFlow(flow);
+
                     // Add to g_state
                     {
                         std::lock_guard<std::mutex> lk(g_state.mtx);

@@ -35,11 +35,11 @@ void RenderInspectorPanel() {
     ImGui::BeginChild("FlowTableChild", ImVec2(0, ImGui::GetContentRegionAvail().y * 0.5f), true);
     if (ImGui::BeginTable("InspectorFlows", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY)) {
         ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Method", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("Tags", ImGuiTableColumnFlags_WidthFixed, 80.0f);
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 50.0f);
         ImGui::TableSetupColumn("Host", ImGuiTableColumnFlags_WidthStretch, 0.2f);
-        ImGui::TableSetupColumn("URL", ImGuiTableColumnFlags_WidthStretch, 0.6f);
+        ImGui::TableSetupColumn("URL / Stream Data", ImGuiTableColumnFlags_WidthStretch, 0.6f);
         ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 60.0f);
         ImGui::TableSetupColumn("ms", ImGuiTableColumnFlags_WidthFixed, 50.0f);
         ImGui::TableHeadersRow();
@@ -75,7 +75,13 @@ void RenderInspectorPanel() {
             }
             if (is_selected) selectedFlow = &f;
 
-            ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(f.method.c_str());
+            ImGui::TableSetColumnIndex(1);
+            if (f.insight.isStream) ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "[STREAM]");
+            else if (f.insight.isAPI) ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "[API]");
+            else if (f.insight.isTracker) ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "[TRACKER]");
+            else if (f.insight.isAuth) ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.8f, 1.0f), "[AUTH]");
+            else if (f.is_websocket) ImGui::TextColored(ImVec4(0.6f, 0.4f, 1.0f, 1.0f), "[WS]");
+            else ImGui::TextUnformatted(f.method.c_str());
             
             ImGui::TableSetColumnIndex(2);
             ImVec4 statusCol = ImVec4(1,1,1,1);
@@ -85,7 +91,13 @@ void RenderInspectorPanel() {
             ImGui::TextColored(statusCol, "%d", f.status);
             
             ImGui::TableSetColumnIndex(3); ImGui::TextUnformatted(f.host.c_str());
-            ImGui::TableSetColumnIndex(4); ImGui::TextUnformatted(f.url.c_str());
+            ImGui::TableSetColumnIndex(4); 
+            ImGui::TextUnformatted(f.url.c_str());
+            if (f.insight.isStream && !f.insight.mime.empty()) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), " (%s)", f.insight.mime.c_str());
+            }
+
             ImGui::TableSetColumnIndex(5); ImGui::Text("%lld B", f.rsp_size);
             ImGui::TableSetColumnIndex(6); ImGui::Text("%.0f", f.duration_ms);
         }
@@ -104,8 +116,10 @@ void RenderInspectorPanel() {
                 ImGui::SetClipboardText(selectedFlow->url.c_str());
             }
             
-            if (!selectedFlow->insight_tags.empty()) {
-                ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "Tags: %s", selectedFlow->insight_tags.c_str());
+            std::string tags;
+            for (const auto& t : selectedFlow->insight.tags) tags += t + " ";
+            if (!tags.empty() || !selectedFlow->insight_tags.empty()) {
+                ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "Tags: %s %s", tags.c_str(), selectedFlow->insight_tags.c_str());
             }
 
             ImGui::Spacing();
@@ -149,6 +163,47 @@ void RenderInspectorPanel() {
                 RenderJsonTab("Request Headers", selectedFlow->raw_req_headers, g_prettyReqH);
                 RenderJsonTab("Response Headers", selectedFlow->raw_rsp_headers, g_prettyRspH);
                 RenderJsonTab("Body Preview", selectedFlow->body_preview, g_prettyBody);
+
+                if (ImGui::BeginTabItem("[🧠] Intelligence")) {
+                    ImGui::BeginChild("IntellChild", ImVec2(0, 0), true);
+
+                    if (selectedFlow->insight.isStream) {
+                        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "STREAM MEDIA DETECTED");
+                        ImGui::Separator();
+                        ImGui::Text("Direct playback link identified. You can use this in VLC or direct downloaders.");
+                        ImGui::Spacing();
+                        ImGui::TextWrapped("Link: %s", selectedFlow->url.c_str());
+                        ImGui::Spacing();
+                        if (ImGui::Button("COPY DIRECT STREAM LINK", ImVec2(300, 40))) {
+                            ImGui::SetClipboardText(selectedFlow->url.c_str());
+                        }
+                    } 
+                    else if (selectedFlow->insight.isAPI) {
+                        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "API ENDPOINT DETECTED");
+                        ImGui::Separator();
+                        ImGui::Text("This flow contains structured data (JSON/GraphQL).");
+                        
+                        if (!selectedFlow->body_preview.empty()) {
+                            ImGui::Spacing();
+                            ImGui::Text("Extracted Payload:");
+                            std::string preview = selectedFlow->body_preview;
+                            try {
+                                auto j = nlohmann::json::parse(preview);
+                                preview = j.dump(4);
+                            } catch (...) {}
+                            ImGui::InputTextMultiline("##intell_payload", (char*)preview.c_str(), preview.size() + 1, ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - 20), ImGuiInputTextFlags_ReadOnly);
+                        } else {
+                            ImGui::TextDisabled("No body captured (enable body capture in settings).");
+                        }
+                    }
+                    else {
+                        ImGui::TextDisabled("No advanced intelligence available for this specific flow.");
+                        ImGui::TextDisabled("Select an [API] or [STREAM] tagged flow to view deep extractions.");
+                    }
+
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
 
                 ImGui::EndTabBar();
             }

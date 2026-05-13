@@ -397,6 +397,13 @@ void RenderMainPanel() {
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("[CATCHER] Vault")) {
+            g_state.mtx.unlock();
+            RenderCatcherPanel();
+            g_state.mtx.lock();
+            ImGui::EndTabItem();
+        }
+
         if (ImGui::BeginTabItem("[>_] Settings")) {
             g_state.mtx.unlock();
             RenderSettingsPanel();
