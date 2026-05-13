@@ -396,12 +396,7 @@ void RenderMainPanel() {
             g_state.mtx.lock();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("[MOBILE] Mobile")) {
-            g_state.mtx.unlock();
-            RenderMobilePanel();
-            g_state.mtx.lock();
-            ImGui::EndTabItem();
-        }
+
         if (ImGui::BeginTabItem("[>_] Settings")) {
             g_state.mtx.unlock();
             RenderSettingsPanel();

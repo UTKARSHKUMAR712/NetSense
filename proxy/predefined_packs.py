@@ -197,7 +197,7 @@ def get_pack_rules(pack_id: str) -> list:
         if pack["id"] == pack_id:
             out = []
             for i, r in enumerate(pack["rules"]):
-                rule = dict(r)
+                rule = dict(r)  # type: ignore
                 rule["id"]       = f"{pack_id}_{i}"
                 rule["enabled"]  = True
                 rule["category"] = pack["category"]

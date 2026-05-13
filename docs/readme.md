@@ -134,7 +134,6 @@ Each file renders one tab. **Panels must be read-only** — they render snapshot
 | `rule_editor_modal.cpp` | Rule add/edit modal popup |
 | `rule_runtime_panel.cpp` | `[RT] Runtime` — live rule hit counts |
 | `session_panel.cpp` | `[SESSION] History` — SQLite session browser |
-| `mobile_panel.cpp` | `[MOBILE] Mobile` — mobile device proxy setup |
 | `settings_panel.cpp` | `[>_] Settings` — all configuration |
 
 ---

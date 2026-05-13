@@ -1,0 +1,10 @@
+[
+    {
+        "type": "BLOCK",
+        "match": "domain",
+        "pattern": "example.com",
+        "id": "rule_0",
+        "enabled": true,
+        "priority": 0
+    }
+]

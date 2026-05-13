@@ -83,7 +83,6 @@ Netsense/
 │   ├── inspector_panel.cpp   — Rich flow table + detail pane
 │   ├── rules_panel.cpp       — Block/intercept rule editor
 │   ├── session_panel.cpp     — SQLite history + timeline view
-│   ├── mobile_panel.cpp      — Mobile device QR setup
 │   └── settings_panel.cpp   — Cert, proxy, privacy, addons
 │
 ├── proxy/
