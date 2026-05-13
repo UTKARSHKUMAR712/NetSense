@@ -21,8 +21,8 @@ if _DIR not in sys.path:
 
 # pyrefly: ignore [missing-import]
 from mitmproxy import http, ctx
-import rule_engine
-import predefined_packs
+import rule_engine  # type: ignore
+import predefined_packs  # type: ignore
 
 LOG_FILE = os.path.join(_DIR, "netsense_proxy.log")
 
@@ -106,6 +106,7 @@ class InsightAddon:
 
 class WebSocketAddon:
     def websocket_message(self, flow: http.HTTPFlow):
+        if not flow.websocket: return
         msg = flow.websocket.messages[-1]
         tags = list(flow.metadata.get("insight_tags", set())) + ["[WS]"]
         _write({
@@ -116,7 +117,7 @@ class WebSocketAddon:
             "host": flow.request.pretty_host,
             "port": flow.request.port,
             "is_websocket": True,
-            "ws_opcode": 2 if msg.is_binary else 1,
+            "ws_opcode": 1 if msg.is_text else 2,
             "ws_message": get_body_preview(msg.content, 256),
             "insight_tags": tags,
         })
@@ -139,7 +140,7 @@ class LoggerAddon:
             "query_params": str(flow.request.query),
             "cookies": get_cookies(flow.request.cookies),
             "is_websocket": False,
-            "tls_valid": bool(flow.client_conn.tls_established),
+            "tls_valid": flow.client_conn.tls_established,
             "tls_sni": flow.client_conn.sni or "",
             "form_data": json.dumps(list(flow.request.urlencoded_form.items()))
                          if flow.request.urlencoded_form else "",
@@ -147,10 +148,11 @@ class LoggerAddon:
         })
 
     def response(self, flow: http.HTTPFlow):
+        if not flow.response: return
         tags = list(flow.metadata.get("insight_tags", set()))
         duration = 0.0
         if flow.request.timestamp_start and flow.response.timestamp_end:
-            duration = (flow.response.timestamp_end - flow.request.timestamp_start) * 1000
+            duration = (flow.response.timestamp_end - flow.request.timestamp_start) * 1000  # type: ignore
         _write({
             "type": "RSP",
             "ts": time.time(),
@@ -168,10 +170,10 @@ class LoggerAddon:
             "rsp_headers": get_headers(flow.response.headers),
             "query_params": str(flow.request.query),
             "cookies": get_cookies(flow.request.cookies),
-            "body_preview": get_body_preview(flow.response.content),
+            "body_preview": get_body_preview(flow.response.content or b""),
             "insight_tags": tags,
             "is_websocket": False,
-            "tls_valid": bool(flow.client_conn.tls_established),
+            "tls_valid": flow.client_conn.tls_established,
             "tls_sni": flow.client_conn.sni or "",
             "redirect_chain": flow.response.headers.get("location", "")
                               if flow.response.status_code in (301, 302, 307, 308) else "",
