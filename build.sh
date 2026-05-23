@@ -22,6 +22,7 @@ SRC_UI="ui/main_ui.cpp ui/theme.cpp ui/panels/main_panel.cpp ui/panels/inspector
 SRC_RULES="rules/rule_manager.cpp"
 SRC_PROXY="core/proxy_reader.cpp"
 SRC_SETTINGS="core/settings_persist.cpp"
+SRC_SYSPROXY="core/system_proxy.cpp"
 SRC_BACKEND="backend/runtime_health.cpp"
 SRC_UTILS="utils/structured_log.cpp"
 
@@ -55,6 +56,7 @@ LIBS=(
   -lcomdlg32
   -luser32
   -lkernel32
+  -lwininet
   -lglfw3
   -lopengl32
 )
@@ -72,6 +74,7 @@ g++ "${FLAGS[@]}" \
     "$SRC_DB" \
     $SRC_ANALYSIS \
     "$SRC_SETTINGS" \
+    "$SRC_SYSPROXY" \
     "$SRC_BACKEND" \
     "$SRC_UTILS" \
     "$OBJ_SQLITE" \

@@ -1,6 +1,7 @@
 #include "../../imgui/imgui.h"
 #include "../../core/app_data.h"
 #include "../../core/proxy_reader.h"
+#include "../../core/system_proxy.h"
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -9,7 +10,6 @@
 #include <filesystem>
 
 static DWORD g_selectedPID = 0;
-static bool g_proxyActive = false;
 static bool g_filterReq = true;
 static bool g_filterRsp = true;
 
@@ -355,11 +355,38 @@ void RenderMainPanel() {
             g_state.filterEstablished.store(filterOn);
         }
         ImGui::Separator();
-        if (ImGui::Button(g_proxyActive ? "Stop Proxy" : "Start Proxy")) {
-            g_proxyActive = !g_proxyActive;
-            if(g_proxyActive) StartProxyServer();
-            else StopProxyServer();
+
+        // ── Live proxy status indicator ──────────────────────
+        if (SystemProxy::IsActive()) {
+            ImGui::TextColored(ImVec4(0.1f, 1.0f, 0.4f, 1.0f),
+                "[PROXY ACTIVE]  %s", SystemProxy::ActiveAddress().c_str());
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "All system traffic is routed through NetSense+.\n"
+                    "Proxy will auto-restore when you close the app.");
+            ImGui::SameLine();
+            // Power-user manual stop
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f,0.15f,0.15f,1.0f));
+            if (ImGui::SmallButton("Stop")) {
+                SystemProxy::Restore();
+                StopProxyServer();
+            }
+            ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Manually stop proxy and restore system settings.");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "[PROXY OFF]");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Proxy is not active. Click Restart to re-enable.");
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f,0.5f,0.2f,1.0f));
+            if (ImGui::SmallButton("Restart Proxy")) {
+                StartProxyServer();
+                SystemProxy::Activate(g_settings.proxyPort);
+            }
+            ImGui::PopStyleColor();
         }
+
         ImGui::Separator();
         if (ImGui::Button("Clear Logs")) g_state.logLines.clear();
         ImGui::EndMenuBar();

@@ -15,6 +15,7 @@
 #include "core/network_monitor.h"
 #include "core/proxy_reader.h"
 #include "core/traffic_db.h"
+#include "core/system_proxy.h"
 #include "analysis/traffic_analyzer.h"
 #include "analysis/flow_pipeline.h"
 #include "dns/dns_resolver.h"
@@ -52,13 +53,22 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE,
     g_state.currentSessionId = TrafficDB::StartSession("Session - " + std::to_string(time(NULL)));
     StartDnsResolver();
     StartNetworkMonitor();
+
+    // 3. Auto-start proxy + route ALL system traffic through NetSense+
+    //    StartProxyServer() launches mitmdump.exe.
+    //    SystemProxy::Activate() points Windows proxy settings to us.
+    //    On exit, Restore() puts everything back automatically.
+    StartProxyServer();
+    SystemProxy::Activate(g_settings.proxyPort);
+
     StartProxyReader();
     StartTrafficAnalyzer();
 
     // 3. Run UI (blocks until window is closed)
     int result = RunUI();
 
-    // 4. Cleanup
+    // 4. Cleanup — restore system proxy FIRST before killing mitmdump
+    SystemProxy::Restore();  // puts Windows proxy back to original settings
     SaveSettings();
     g_state.running = false;
     StopTrafficAnalyzer();
