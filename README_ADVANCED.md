@@ -236,20 +236,6 @@ Settings → Privacy Controls:
 
 ---
 
-## Mobile Device Setup
-
-1. Open **Mobile** tab
-2. Note the proxy address shown: e.g. `192.168.1.42:8080`
-3. Scan the QR code or enter manually in phone WiFi settings
-4. For HTTPS: visit `mitm.it` on the device to install the cert
-
-### Android
-Settings → WiFi → Long-press network → Modify → Advanced → Manual Proxy
-
-### iPhone
-Settings → WiFi → (i) → Configure Proxy → Manual
-
----
 
 ## Performance Notes
 

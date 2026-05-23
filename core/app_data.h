@@ -90,8 +90,12 @@ struct ProxyFlow {
     std::string insight_tags;    // comma-separated: "streaming,api"
     bool        is_websocket = false;
     std::string process_hint;    // best-guess process name
-    bool        tls_valid = false;
+    bool        tls_valid    = false;
     std::string tls_sni;
+    std::string tls_version;
+    std::string tls_cipher;
+    std::string tls_alpn;
+    
     std::string redirect_chain;
     std::string form_data;
     std::string ws_message;

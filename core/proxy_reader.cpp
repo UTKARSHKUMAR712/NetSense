@@ -109,6 +109,9 @@ static void ProxyLoop() {
                     flow.is_websocket = j.value("is_websocket", false);
                     flow.tls_valid = j.value("tls_valid", false);
                     flow.tls_sni = j.value("tls_sni", "");
+                    flow.tls_version = j.value("tls_version", "");
+                    flow.tls_cipher = j.value("tls_cipher", "");
+                    flow.tls_alpn = j.value("tls_alpn", "");
                     flow.form_data = j.value("form_data", "");
                     flow.redirect_chain = j.value("redirect_chain", "");
                     flow.ws_opcode = j.value("ws_opcode", -1);
@@ -124,6 +127,14 @@ static void ProxyLoop() {
                             if (i < j["insight_tags"].size() - 1) joined_tags += ",";
                         }
                         flow.insight_tags = joined_tags;
+                    }
+                    
+                    if (j.contains("catcher_data")) {
+                        auto& cd = j["catcher_data"];
+                        flow.insight.vaultPayload.username = cd.value("username", "");
+                        flow.insight.vaultPayload.password = cd.value("password", "");
+                        flow.insight.vaultPayload.bearerToken = cd.value("bearerToken", "");
+                        flow.insight.vaultPayload.authCookies = cd.value("authCookies", "");
                     }
                     
                     if (flow.type == "RSP") {

@@ -60,6 +60,29 @@ def get_body_preview(content: bytes, max_len: int = 5 * 1024 * 1024) -> str:
     except Exception:
         return "[binary data]"
 
+def extract_catcher_data(flow: http.HTTPFlow) -> dict:
+    data = {"username": "", "password": "", "bearerToken": "", "authCookies": ""}
+    # Extract Token
+    auth = flow.request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        data["bearerToken"] = auth[7:]
+    
+    # Extract Cookies
+    cookies = flow.request.headers.get("cookie", "")
+    if cookies:
+        data["authCookies"] = cookies
+        
+    # Extract form data for credentials
+    if flow.request.urlencoded_form:
+        for k, v in flow.request.urlencoded_form.items():
+            kl = k.lower()
+            if "user" in kl or "email" in kl or "login" in kl:
+                data["username"] = v
+            elif "pass" in kl:
+                data["password"] = v
+                
+    return data
+
 
 def tag_insights(flow: http.HTTPFlow) -> list:
     tags = []
@@ -142,9 +165,13 @@ class LoggerAddon:
             "is_websocket": False,
             "tls_valid": flow.client_conn.tls_established,
             "tls_sni": flow.client_conn.sni or "",
+            "tls_version": flow.client_conn.tls_version or "",
+            "tls_cipher": flow.client_conn.cipher or "",
+            "tls_alpn": flow.client_conn.alpn and flow.client_conn.alpn.decode("utf-8", "ignore") or "",
             "form_data": json.dumps(list(flow.request.urlencoded_form.items()))
                          if flow.request.urlencoded_form else "",
             "insight_tags": tags,
+            "catcher_data": extract_catcher_data(flow),
         })
 
     def response(self, flow: http.HTTPFlow):
@@ -175,8 +202,12 @@ class LoggerAddon:
             "is_websocket": False,
             "tls_valid": flow.client_conn.tls_established,
             "tls_sni": flow.client_conn.sni or "",
+            "tls_version": flow.client_conn.tls_version or "",
+            "tls_cipher": flow.client_conn.cipher or "",
+            "tls_alpn": flow.client_conn.alpn and flow.client_conn.alpn.decode("utf-8", "ignore") or "",
             "redirect_chain": flow.response.headers.get("location", "")
                               if flow.response.status_code in (301, 302, 307, 308) else "",
+            "catcher_data": extract_catcher_data(flow),
         })
 
 
