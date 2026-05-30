@@ -8,6 +8,9 @@
 #include <wininet.h>
 #include <string>
 #include <cstdlib>
+#include <string>
+#include <cstdlib>
+#include <thread>
 #include "system_proxy.h"
 #include "app_data.h"
 
@@ -71,9 +74,13 @@ static void RegDeleteVal(HKEY hKey, const char* name) {
 // Notify WinINet that proxy settings changed (flushes DNS/conn cache)
 // ─────────────────────────────────────────────────────────────
 static void NotifyProxyChange() {
-    // Tell all open WinINet handles to re-read proxy config
-    InternetSetOptionA(nullptr, INTERNET_OPTION_SETTINGS_CHANGED,  nullptr, 0);
-    InternetSetOptionA(nullptr, INTERNET_OPTION_REFRESH,            nullptr, 0);
+    // Tell all open WinINet handles to re-read proxy config.
+    // Run in a detached thread because InternetSetOption broadcasts 
+    // WM_SETTINGCHANGE which can block/freeze if any system window is hung.
+    std::thread([](){
+        InternetSetOptionA(nullptr, INTERNET_OPTION_SETTINGS_CHANGED, nullptr, 0);
+        InternetSetOptionA(nullptr, INTERNET_OPTION_REFRESH, nullptr, 0);
+    }).detach();
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -5,6 +5,21 @@
 #include <string>
 #include <algorithm>
 #include <ctime>
+#include <map>
+
+// Helper to split string by delimiter
+static std::vector<std::string> SplitString(const std::string& s, char delim) {
+    std::vector<std::string> result;
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        // Trim leading space
+        size_t start = item.find_first_not_of(" ");
+        if (start != std::string::npos) item = item.substr(start);
+        result.push_back(item);
+    }
+    return result;
+}
 
 // ─────────────────────────────────────────────────────────────
 // Aggregated catcher entries (built from live flow buffer)
@@ -105,13 +120,22 @@ void RenderCatcherPanel() {
         (int)g_creds.size(), (int)g_tokens.size(), (int)g_cookies.size());
     ImGui::Separator();
 
+    static int g_selectedTab = 0; // 0=Creds, 1=Tokens, 2=Cookies
+    static std::string g_selectedId = "";
+
+    // Split view sizes
+    float listHeight = ImGui::GetContentRegionAvail().y * 0.65f;
+    float detailHeight = ImGui::GetContentRegionAvail().y - listHeight - 8.0f;
+
     if (ImGui::BeginTabBar("CatcherTabs")) {
 
         // ── Credentials Tab ───────────────────────────────────
         if (ImGui::BeginTabItem("Credentials")) {
+            if (g_selectedTab != 0) { g_selectedTab = 0; g_selectedId = ""; }
+
             ImGui::Checkbox("Reveal Passwords", &g_revealPasswords);
             ImGui::SameLine();
-            if (ImGui::Button("Clear##creds")) g_creds.clear();
+            if (ImGui::Button("Clear##creds")) { g_creds.clear(); g_selectedId = ""; }
             ImGui::Separator();
 
             if (g_creds.empty()) {
@@ -120,7 +144,7 @@ void RenderCatcherPanel() {
                 ImGui::TextColored(ImVec4(0.4f,0.4f,0.4f,1.0f),
                     "  Login attempts (POST /login, /auth) will appear here automatically.");
             } else {
-                ImGui::BeginChild("CredsList", ImVec2(0,0), false);
+                ImGui::BeginChild("CredsList", ImVec2(0, listHeight), true);
                 if (ImGui::BeginTable("CredsTable", 4,
                     ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                     ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable)) {
@@ -132,21 +156,34 @@ void RenderCatcherPanel() {
                     ImGui::TableHeadersRow();
 
                     for (auto& c : g_creds) {
+                        std::string rowId = c.host + "|" + c.username;
+                        bool isSelected = (g_selectedId == rowId);
+                        
                         ImGui::TableNextRow();
+                        if (isSelected) {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImColor(40, 60, 90, 255));
+                        }
+
                         // Time
                         ImGui::TableSetColumnIndex(0);
                         char tbuf[32]; time_t ts = (time_t)c.ts;
                         strftime(tbuf, sizeof(tbuf), "%H:%M:%S", localtime(&ts));
-                        ImGui::TextDisabled("%s", tbuf);
+                        std::string selLabel = std::string(tbuf) + "##cred_" + rowId;
+                        if (ImGui::Selectable(selLabel.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                            g_selectedId = rowId;
+                        }
+                        
                         // Host
                         ImGui::TableSetColumnIndex(1);
                         ImGui::TextColored(ImVec4(0.4f,0.9f,1.0f,1.0f), "%s", c.host.c_str());
+                        
                         // Username
                         ImGui::TableSetColumnIndex(2);
                         if (!c.username.empty())
                             ImGui::TextColored(ImVec4(0.3f,1.0f,0.5f,1.0f), "%s", c.username.c_str());
                         else
                             ImGui::TextDisabled("(none)");
+                            
                         // Password — masked unless revealed or hovered
                         ImGui::TableSetColumnIndex(3);
                         if (!c.password.empty()) {
@@ -158,10 +195,6 @@ void RenderCatcherPanel() {
                                 if (ImGui::IsItemHovered()) {
                                     ImGui::SetTooltip("%s", c.password.c_str());
                                 }
-                            }
-                            ImGui::SameLine();
-                            if (ImGui::SmallButton(("Copy##pw" + c.host + c.username).c_str())) {
-                                ImGui::SetClipboardText(c.password.c_str());
                             }
                         } else {
                             ImGui::TextDisabled("(none)");
@@ -176,7 +209,9 @@ void RenderCatcherPanel() {
 
         // ── Tokens Tab ────────────────────────────────────────
         if (ImGui::BeginTabItem("Tokens")) {
-            if (ImGui::Button("Clear##tokens")) g_tokens.clear();
+            if (g_selectedTab != 1) { g_selectedTab = 1; g_selectedId = ""; }
+
+            if (ImGui::Button("Clear##tokens")) { g_tokens.clear(); g_selectedId = ""; }
             ImGui::Separator();
 
             if (g_tokens.empty()) {
@@ -185,7 +220,7 @@ void RenderCatcherPanel() {
                 ImGui::TextColored(ImVec4(0.4f,0.4f,0.4f,1.0f),
                     "  OAuth Bearer tokens and JWTs will appear here automatically.");
             } else {
-                ImGui::BeginChild("TokensList", ImVec2(0,0), false);
+                ImGui::BeginChild("TokensList", ImVec2(0, listHeight), true);
                 if (ImGui::BeginTable("TokensTable", 4,
                     ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                     ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable)) {
@@ -197,11 +232,21 @@ void RenderCatcherPanel() {
                     ImGui::TableHeadersRow();
 
                     for (auto& t : g_tokens) {
+                        std::string rowId = t.host + "|" + t.token;
+                        bool isSelected = (g_selectedId == rowId);
+                        
                         ImGui::TableNextRow();
+                        if (isSelected) {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImColor(40, 60, 90, 255));
+                        }
+                        
                         ImGui::TableSetColumnIndex(0);
                         char tbuf[32]; time_t ts = (time_t)t.ts;
                         strftime(tbuf, sizeof(tbuf), "%H:%M:%S", localtime(&ts));
-                        ImGui::TextDisabled("%s", tbuf);
+                        std::string selLabel = std::string(tbuf) + "##tok_" + rowId;
+                        if (ImGui::Selectable(selLabel.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                            g_selectedId = rowId;
+                        }
 
                         ImGui::TableSetColumnIndex(1);
                         ImVec4 typeCol = t.tokenType == "JWT"
@@ -213,17 +258,9 @@ void RenderCatcherPanel() {
                         ImGui::TextColored(ImVec4(0.4f,0.9f,1.0f,1.0f), "%s", t.host.c_str());
 
                         ImGui::TableSetColumnIndex(3);
-                        // Show truncated token inline
                         std::string display = t.token.size() > 60
                             ? t.token.substr(0, 60) + "..." : t.token;
                         ImGui::TextColored(ImVec4(0.85f,0.85f,0.85f,1.0f), "%s", display.c_str());
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("%s", t.token.c_str());
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton(("Copy##tk" + t.host).c_str())) {
-                            ImGui::SetClipboardText(t.token.c_str());
-                        }
                     }
                     ImGui::EndTable();
                 }
@@ -234,7 +271,9 @@ void RenderCatcherPanel() {
 
         // ── Cookies Tab ───────────────────────────────────────
         if (ImGui::BeginTabItem("Cookies")) {
-            if (ImGui::Button("Clear##cookies")) g_cookies.clear();
+            if (g_selectedTab != 2) { g_selectedTab = 2; g_selectedId = ""; }
+
+            if (ImGui::Button("Clear##cookies")) { g_cookies.clear(); g_selectedId = ""; }
             ImGui::Separator();
 
             if (g_cookies.empty()) {
@@ -243,7 +282,7 @@ void RenderCatcherPanel() {
                 ImGui::TextColored(ImVec4(0.4f,0.4f,0.4f,1.0f),
                     "  Authentication cookies will appear here automatically.");
             } else {
-                ImGui::BeginChild("CookiesList", ImVec2(0,0), false);
+                ImGui::BeginChild("CookiesList", ImVec2(0, listHeight), true);
                 if (ImGui::BeginTable("CookiesTable", 3,
                     ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                     ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable)) {
@@ -254,11 +293,21 @@ void RenderCatcherPanel() {
                     ImGui::TableHeadersRow();
 
                     for (auto& ck : g_cookies) {
+                        std::string rowId = ck.host;
+                        bool isSelected = (g_selectedId == rowId);
+                        
                         ImGui::TableNextRow();
+                        if (isSelected) {
+                            ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, ImColor(40, 60, 90, 255));
+                        }
+                        
                         ImGui::TableSetColumnIndex(0);
                         char tbuf[32]; time_t ts = (time_t)ck.ts;
                         strftime(tbuf, sizeof(tbuf), "%H:%M:%S", localtime(&ts));
-                        ImGui::TextDisabled("%s", tbuf);
+                        std::string selLabel = std::string(tbuf) + "##cookie_" + rowId;
+                        if (ImGui::Selectable(selLabel.c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                            g_selectedId = rowId;
+                        }
 
                         ImGui::TableSetColumnIndex(1);
                         ImGui::TextColored(ImVec4(0.4f,0.9f,1.0f,1.0f), "%s", ck.host.c_str());
@@ -267,13 +316,6 @@ void RenderCatcherPanel() {
                         std::string display = ck.cookies.size() > 80
                             ? ck.cookies.substr(0, 80) + "..." : ck.cookies;
                         ImGui::TextUnformatted(display.c_str());
-                        if (ImGui::IsItemHovered()) {
-                            ImGui::SetTooltip("%s", ck.cookies.c_str());
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton(("Copy##ck" + ck.host).c_str())) {
-                            ImGui::SetClipboardText(ck.cookies.c_str());
-                        }
                     }
                     ImGui::EndTable();
                 }
@@ -284,4 +326,167 @@ void RenderCatcherPanel() {
 
         ImGui::EndTabBar();
     }
+
+    // ── Bottom Detail Pane ────────────────────────────────────
+    ImGui::Spacing();
+    ImGui::Separator();
+    
+    if (g_selectedId.empty()) {
+        ImGui::TextDisabled("Select an item above to view details.");
+        return;
+    }
+
+    ImGui::BeginChild("VaultDetailPane", ImVec2(0, 0), true);
+
+    if (g_selectedTab == 0) { // Creds
+        const CredEntry* sel = nullptr;
+        for (auto& c : g_creds) if (c.host + "|" + c.username == g_selectedId) { sel = &c; break; }
+        if (sel) {
+            ImGui::TextColored(ImVec4(1.0f,0.4f,0.4f,1.0f), "[CREDENTIAL DETAILS]");
+            ImGui::Separator();
+            ImGui::TextDisabled("Host: "); ImGui::SameLine(); ImGui::Text("%s", sel->host.c_str());
+            ImGui::TextDisabled("User: "); ImGui::SameLine(); ImGui::TextColored(ImVec4(0.3f,1.0f,0.5f,1.0f), "%s", sel->username.c_str());
+            ImGui::TextDisabled("Pass: "); ImGui::SameLine(); ImGui::TextColored(ImVec4(1.0f,0.4f,0.4f,1.0f), "%s", sel->password.c_str());
+            ImGui::Spacing();
+            if (ImGui::Button("Copy Password")) ImGui::SetClipboardText(sel->password.c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Copy Username")) ImGui::SetClipboardText(sel->username.c_str());
+        } else {
+            g_selectedId = "";
+        }
+    } 
+    else if (g_selectedTab == 1) { // Tokens
+        const TokenEntry* sel = nullptr;
+        for (auto& t : g_tokens) if (t.host + "|" + t.token == g_selectedId) { sel = &t; break; }
+        if (sel) {
+            ImGui::TextColored(ImVec4(1.0f,0.6f,0.2f,1.0f), "[TOKEN DETAILS]");
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 100);
+            if (ImGui::Button("Copy Token")) ImGui::SetClipboardText(sel->token.c_str());
+            ImGui::Separator();
+            
+            ImGui::TextDisabled("Host: "); ImGui::SameLine(); ImGui::Text("%s", sel->host.c_str());
+            ImGui::TextDisabled("Type: "); ImGui::SameLine(); ImGui::TextColored(ImVec4(0.8f,0.5f,1.0f,1.0f), "%s", sel->tokenType.c_str());
+            ImGui::Spacing();
+            ImGui::TextDisabled("Raw Token:");
+            
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+            // Fix: pass valid buffer size (+1) and use a local copy to avoid modifying c_str (even though it's read-only)
+            std::string tokenCopy = sel->token;
+            tokenCopy.resize(tokenCopy.size() + 1);
+            ImGui::InputTextMultiline("##tkview", &tokenCopy[0], tokenCopy.size(), 
+                ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - 30.0f), ImGuiInputTextFlags_ReadOnly);
+            ImGui::PopStyleColor();
+            
+            if (sel->tokenType == "JWT" && ImGui::Button("Decrypt JWT payload")) {
+                // Future expansion: auto base64-decode the middle payload
+                // Could spawn a popup or modify the display
+            }
+        } else {
+            g_selectedId = "";
+        }
+    }
+    else if (g_selectedTab == 2) { // Cookies
+        const CookieEntry* sel = nullptr;
+        for (auto& ck : g_cookies) if (ck.host == g_selectedId) { sel = &ck; break; }
+        if (sel) {
+            ImGui::TextColored(ImVec4(0.4f,0.9f,1.0f,1.0f), "[COOKIE DETAILS]");
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 100);
+            if (ImGui::Button("Copy Cookies")) ImGui::SetClipboardText(sel->cookies.c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Export to TXT")) {
+                std::string path = "recordings/cookies_" + sel->host + "_" + std::to_string(time(NULL)) + ".txt";
+                FILE* f = fopen(path.c_str(), "w");
+                if (f) {
+                    fprintf(f, "Host: %s\n\n%s\n", sel->host.c_str(), sel->cookies.c_str());
+                    fclose(f);
+                }
+            }
+            ImGui::Separator();
+            
+            ImGui::TextDisabled("Host: "); ImGui::SameLine(); ImGui::Text("%s", sel->host.c_str());
+            ImGui::Spacing();
+            
+            if (ImGui::BeginTabBar("CookieDetailTabs")) {
+                if (ImGui::BeginTabItem("Parsed Table")) {
+                    ImGui::BeginChild("CookieTableChild", ImVec2(0, 0), true);
+                    if (ImGui::BeginTable("ParsedCookiesTable", 3,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY)) {
+                        ImGui::TableSetupScrollFreeze(0, 1);
+                        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+                        ImGui::TableHeadersRow();
+
+                        auto pairs = SplitString(sel->cookies, ';');
+                        for (const auto& pair : pairs) {
+                            if (pair.empty()) continue;
+                            size_t eq = pair.find('=');
+                            std::string key = (eq != std::string::npos) ? pair.substr(0, eq) : pair;
+                            std::string val = (eq != std::string::npos) ? pair.substr(eq + 1) : "";
+                            
+                            std::string keyLower = key;
+                            for (char& c : keyLower) c = tolower(c);
+
+                            // Determine type/color
+                            std::string typeStr = "Standard";
+                            ImVec4 color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+                            
+                            if (keyLower.find("session") != std::string::npos || 
+                                keyLower.find("auth") != std::string::npos ||
+                                keyLower.find("token") != std::string::npos ||
+                                keyLower.find("sid") != std::string::npos ||
+                                keyLower.find("jwt") != std::string::npos ||
+                                keyLower.find("__host-") != std::string::npos ||
+                                keyLower.find("__secure-") != std::string::npos) {
+                                typeStr = "Auth / Session";
+                                color = ImVec4(0.3f, 1.0f, 0.5f, 1.0f); // Green
+                            } else if (keyLower.find("_ga") != std::string::npos ||
+                                       keyLower.find("analytics") != std::string::npos ||
+                                       keyLower.find("track") != std::string::npos ||
+                                       keyLower == "_fbp" || keyLower == "_gcl_au") {
+                                typeStr = "Tracking";
+                                color = ImVec4(1.0f, 0.6f, 0.2f, 1.0f); // Orange
+                            } else if (keyLower.find("cf_") != std::string::npos || 
+                                       keyLower.find("__cf") != std::string::npos) {
+                                typeStr = "Security / WAF";
+                                color = ImVec4(0.4f, 0.8f, 1.0f, 1.0f); // Blue
+                            } else if (keyLower == "lang" || keyLower == "theme") {
+                                typeStr = "Preference";
+                                color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+                            }
+
+                            ImGui::TableNextRow();
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::TextColored(color, "%s", key.c_str());
+                            
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::TextColored(color, "%s", typeStr.c_str());
+                            
+                            ImGui::TableSetColumnIndex(2);
+                            ImGui::TextWrapped("%s", val.c_str());
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                
+                if (ImGui::BeginTabItem("Raw String")) {
+                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+                    std::string cookieCopy = sel->cookies;
+                    cookieCopy.resize(cookieCopy.size() + 1);
+                    ImGui::InputTextMultiline("##ckview", &cookieCopy[0], cookieCopy.size(), 
+                        ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - 10.0f), ImGuiInputTextFlags_ReadOnly);
+                    ImGui::PopStyleColor();
+                    ImGui::EndTabItem();
+                }
+                
+                ImGui::EndTabBar();
+            }
+        } else {
+            g_selectedId = "";
+        }
+    }
+
+    ImGui::EndChild();
 }

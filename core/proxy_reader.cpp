@@ -18,6 +18,7 @@
 #include "../analysis/flow_pipeline.h"
 #include "../backend/runtime_health.h"
 #include "../utils/time_utils.h"
+#include "../rules/rule_manager.h"
 
 using json = nlohmann::json;
 
@@ -101,6 +102,17 @@ static void ProxyLoop() {
                     flow.method = j.value("method", "");
                     flow.url = j.value("url", "");
                     flow.host = j.value("host", "");
+
+                    // Intercept Rule Engine Events for live hit tracking
+                    if (flow.type == "RULE_EVENT") {
+                        std::string rule_id = j.value("rule_id", "");
+                        if (!rule_id.empty() && rule_id != "?") {
+                            RuleManager::IncrementHit(rule_id);
+                        }
+                        // For Alerts, we could also route to an alert log, but it's already written to netsense_alerts.log in python
+                        continue; 
+                    }
+
                     flow.port = j.value("port", 0);
                     flow.http_version = j.value("http_version", "");
                     flow.req_size = j.value("req_size", 0);
@@ -297,5 +309,8 @@ void StopProxyServer() {
         g_hProxyProcess = NULL;
     }
     // Also run taskkill to ensure any zombie child processes of mitmdump are destroyed
-    system("taskkill /F /IM mitmdump.exe /T 2>nul");
+    // Run asynchronously to avoid freezing the UI thread if taskkill blocks
+    std::thread([](){
+        system("taskkill /F /IM mitmdump.exe /T 2>nul");
+    }).detach();
 }
