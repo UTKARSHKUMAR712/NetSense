@@ -207,11 +207,11 @@ static void RenderCustomRulesTab() {
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            ImGui::Checkbox("##en", &r.enabled);
+            ImGui::Checkbox(("##en" + std::to_string(i)).c_str(), &r.enabled);
 
             ImGui::TableSetColumnIndex(1);
             ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::InputInt("##pri", &r.priority, 0, 0);
+            ImGui::InputInt(("##pri" + std::to_string(i)).c_str(), &r.priority, 0, 0);
 
             ImGui::TableSetColumnIndex(2);
             ImGui::SetNextItemWidth(-FLT_MIN);
@@ -219,7 +219,7 @@ static void RenderCustomRulesTab() {
             for (int t = 0; t < RULE_TYPE_COUNT; ++t)
                 if (r.type == RULE_TYPES[t]) { cur_type = t; break; }
             ImGui::PushStyleColor(ImGuiCol_Text, RuleTypeColor(r.type));
-            if (ImGui::Combo("##type", &cur_type, RULE_TYPES, RULE_TYPE_COUNT))
+            if (ImGui::Combo(("##type" + std::to_string(i)).c_str(), &cur_type, RULE_TYPES, RULE_TYPE_COUNT))
                 r.type = RULE_TYPES[cur_type];
             ImGui::PopStyleColor();
 
@@ -228,13 +228,13 @@ static void RenderCustomRulesTab() {
             int cur_match = 0;
             for (int m = 0; m < MATCH_MODE_COUNT; ++m)
                 if (r.match == MATCH_MODES[m]) { cur_match = m; break; }
-            if (ImGui::Combo("##match", &cur_match, MATCH_MODES, MATCH_MODE_COUNT))
+            if (ImGui::Combo(("##match" + std::to_string(i)).c_str(), &cur_match, MATCH_MODES, MATCH_MODE_COUNT))
                 r.match = MATCH_MODES[cur_match];
 
             ImGui::TableSetColumnIndex(4);
             ImGui::SetNextItemWidth(-FLT_MIN);
             char patBuf[256] = {}; strncpy(patBuf, r.pattern.c_str(), 255);
-            if (ImGui::InputText("##pat", patBuf, sizeof(patBuf))) r.pattern = patBuf;
+            if (ImGui::InputText(("##pat" + std::to_string(i)).c_str(), patBuf, sizeof(patBuf))) r.pattern = patBuf;
             if (!r.description.empty() && ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", r.description.c_str());
 
@@ -246,15 +246,15 @@ static void RenderCustomRulesTab() {
 
             ImGui::TableSetColumnIndex(6);
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f,0.45f,0.8f,1.0f));
-            if (ImGui::SmallButton("> Edit"))
+            if (ImGui::SmallButton(("> Edit##" + std::to_string(i)).c_str()))
                 g_pendingEdit = i;  // defer: open popup after EndTable
             ImGui::PopStyleColor();
 
             ImGui::TableSetColumnIndex(7);
-            if (ImGui::SmallButton("Dup")) dupIdx = i;
+            if (ImGui::SmallButton(("Dup##" + std::to_string(i)).c_str())) dupIdx = i;
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f,0.15f,0.15f,1.0f));
-            if (ImGui::SmallButton("X")) deleteIdx = i;
+            if (ImGui::SmallButton(("X##" + std::to_string(i)).c_str())) deleteIdx = i;
             ImGui::PopStyleColor();
 
             ImGui::PopID();
