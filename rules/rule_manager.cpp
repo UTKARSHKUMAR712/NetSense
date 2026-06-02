@@ -58,9 +58,10 @@ void Save() {
     std::lock_guard<std::mutex> lk(g_rulesMtx);
     nlohmann::json j = nlohmann::json::array();
     int idx = 0;
-    for (const auto& r : g_rules) {
+    for (auto& r : g_rules) {
         nlohmann::json item;
-        item["id"]          = r.id.empty() ? ("rule_" + std::to_string(idx)) : r.id;
+        if (r.id.empty()) r.id = "rule_" + std::to_string(idx);
+        item["id"]          = r.id;
         item["type"]        = r.type;
         item["match"]       = r.match;
         item["pattern"]     = r.pattern;

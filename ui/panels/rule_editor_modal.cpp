@@ -192,8 +192,17 @@ void RenderRuleEditorModal() {
     } else if (r.type == "BLOCK_METHOD") {
         CfgInput("HTTP Method",   r.config, "method", "POST  GET  DELETE  PUT");
 
-    } else if (r.type == "ALERT_ON_MATCH" || r.type == "LOG_ONLY"
-            || r.type == "SAVE_MATCHES") {
+    } else if (r.type == "ALERT_ON_MATCH") {
+        ImGui::TextColored(ImVec4(1.0f,0.5f,0.2f,1), "Alert Configuration");
+        CfgInput("Severity", r.config, "severity", "e.g. info, warning, critical");
+        CfgInput("Message",  r.config, "message",  "Custom alert message to display");
+        ImGui::Spacing();
+        ImGui::TextDisabled("  Optional conditions:");
+        CfgInput("  MIME filter",    r.conditions, "mime",    "Only match content type");
+        CfgInput("  Status filter",  r.conditions, "status",  "Only match HTTP status");
+        CfgInput("  Process filter", r.conditions, "process", "e.g. chrome.exe");
+
+    } else if (r.type == "LOG_ONLY" || r.type == "SAVE_MATCHES") {
         ImGui::TextDisabled("  Optional conditions:");
         CfgInput("  MIME filter",    r.conditions, "mime",    "Only match content type");
         CfgInput("  Status filter",  r.conditions, "status",  "Only match HTTP status");

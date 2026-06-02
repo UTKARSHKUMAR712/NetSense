@@ -109,7 +109,12 @@ static void ProxyLoop() {
                         if (!rule_id.empty() && rule_id != "?") {
                             RuleManager::IncrementHit(rule_id);
                         }
-                        // For Alerts, we could also route to an alert log, but it's already written to netsense_alerts.log in python
+                        std::string tag = j.value("tag", "[RULE MATCH]");
+                        std::string url = j.value("url", "");
+                        std::string extra = j.value("extra", "");
+                        std::string msg = tag + " ID:" + rule_id + " " + url;
+                        if (!extra.empty()) msg += " | " + extra;
+                        ProxyLog(msg);
                         continue; 
                     }
 
@@ -235,8 +240,84 @@ void StopProxyReader() {
     if(g_proxy_thread.joinable()) g_proxy_thread.join();
 }
 
+static void SilentRunCommand(const std::string& cmd) {
+    STARTUPINFOA si = {sizeof(STARTUPINFOA)};
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = {};
+    if (CreateProcessA(NULL, (LPSTR)cmd.c_str(), NULL, NULL, FALSE,
+                        CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    }
+}
+
+void AutoInstallCertificates() {
+    char* userProfile = getenv("USERPROFILE");
+    if (!userProfile) return;
+    std::string mitmFolder = std::string(userProfile) + "\\.mitmproxy";
+    
+    // Ensure the folder exists
+    CreateDirectoryA(mitmFolder.c_str(), NULL);
+    
+    // Locate bundled certs next to the executable
+    char exePath[MAX_PATH];
+    GetModuleFileNameA(nullptr, exePath, MAX_PATH);
+    std::string appDir(exePath);
+    auto slash = appDir.rfind('\\');
+    if (slash != std::string::npos) appDir.resize(slash + 1);
+    
+    std::vector<std::string> certFiles = {
+        "mitmproxy-ca-cert.p12",
+        "mitmproxy-ca-cert.pem",
+        "mitmproxy-ca.pem",
+        "mitmproxy-ca-cert.cer",
+        "mitmproxy-ca.p12",
+        "mitmproxy-dhparam.pem"
+    };
+    
+    bool copiedAny = false;
+    for (const auto& file : certFiles) {
+        std::string src = appDir + file;
+        std::string dest = mitmFolder + "\\" + file;
+        if (GetFileAttributesA(src.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            // Only copy if destination doesn't exist or is different size to avoid locking/overwriting issues
+            WIN32_FILE_ATTRIBUTE_DATA srcAttr, destAttr;
+            bool destExists = GetFileAttributesExA(dest.c_str(), GetFileExInfoStandard, &destAttr);
+            GetFileAttributesExA(src.c_str(), GetFileExInfoStandard, &srcAttr);
+            
+            if (!destExists || srcAttr.nFileSizeLow != destAttr.nFileSizeLow) {
+                if (CopyFileA(src.c_str(), dest.c_str(), FALSE)) {
+                    copiedAny = true;
+                }
+            }
+        }
+    }
+    
+    if (copiedAny) {
+        ProxyLog("[CERT] Bundled certificates copied to user profile.");
+    }
+    
+    // Import the certificate into the Trusted Root Store
+    std::string certPath = mitmFolder + "\\mitmproxy-ca-cert.cer";
+    if (GetFileAttributesA(certPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        certPath = mitmFolder + "\\mitmproxy-ca-cert.p12";
+    }
+    
+    if (GetFileAttributesA(certPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        // Run certutil -addstore -user root <cert>
+        std::string cmd = "certutil.exe -addstore -user root \"" + certPath + "\"";
+        SilentRunCommand(cmd);
+        ProxyLog("[CERT] mitmproxy root CA certificate auto-installed successfully.");
+    }
+}
+
 bool StartProxyServer() {
     if (g_hProxyProcess != NULL) return true;
+
+    // Run first certificate pass (if certs are already bundled or present)
+    AutoInstallCertificates();
 
     char exePath[MAX_PATH];
     GetModuleFileNameA(nullptr, exePath, MAX_PATH);
@@ -299,6 +380,13 @@ bool StartProxyServer() {
 
     g_hProxyProcess = pi.hProcess;
     CloseHandle(pi.hThread);
+
+    // Run second certificate pass in a background thread to capture auto-generated certs
+    std::thread([](){
+        Sleep(2000); // Wait 2 seconds for mitmdump to launch and generate certs
+        AutoInstallCertificates();
+    }).detach();
+
     return true;
 }
 

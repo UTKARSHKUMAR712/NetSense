@@ -368,8 +368,10 @@ void RenderMainPanel() {
             // Power-user manual stop
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f,0.15f,0.15f,1.0f));
             if (ImGui::SmallButton("Stop")) {
+                g_state.mtx.unlock();
                 SystemProxy::Restore();
                 StopProxyServer();
+                g_state.mtx.lock();
             }
             ImGui::PopStyleColor();
             if (ImGui::IsItemHovered())
@@ -381,8 +383,10 @@ void RenderMainPanel() {
             ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f,0.5f,0.2f,1.0f));
             if (ImGui::SmallButton("Restart Proxy")) {
+                g_state.mtx.unlock();
                 StartProxyServer();
                 SystemProxy::Activate(g_settings.proxyPort);
+                g_state.mtx.lock();
             }
             ImGui::PopStyleColor();
         }

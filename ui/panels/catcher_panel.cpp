@@ -463,7 +463,14 @@ void RenderCatcherPanel() {
                             ImGui::TextColored(color, "%s", typeStr.c_str());
                             
                             ImGui::TableSetColumnIndex(2);
-                            ImGui::TextWrapped("%s", val.c_str());
+                            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.08f, 1.0f));
+                            ImGui::PushID(key.c_str());
+                            std::string valCopy = val;
+                            valCopy.resize(valCopy.size() + 1);
+                            ImGui::InputTextMultiline("##val", &valCopy[0], valCopy.size(),
+                                ImVec2(-FLT_MIN, 40.0f), ImGuiInputTextFlags_ReadOnly);
+                            ImGui::PopID();
+                            ImGui::PopStyleColor();
                         }
                         ImGui::EndTable();
                     }

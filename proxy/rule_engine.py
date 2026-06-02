@@ -583,8 +583,14 @@ class RuleExecutor:
     # ── Helpers ──────────────────────────────────────────────
     @staticmethod
     def _emit_alert(rule: dict, flow: http.HTTPFlow, phase: str):
-        msg = (f"[ALERT] Rule '{rule.get('id','?')}' matched {phase}: "
-               f"{flow.request.pretty_url}")
+        cfg = rule.get("config", {})
+        msg = cfg.get("message")
+        if not msg:
+            msg = (f"[ALERT] Rule '{rule.get('id','?')}' matched {phase}: "
+                   f"{flow.request.pretty_url}")
+        
+        severity = cfg.get("severity") or "warning"
+        
         # Emit as RULE_EVENT so the runtime panel + test suite can detect it
         _log({
             "type":      "RULE_EVENT",
@@ -594,13 +600,14 @@ class RuleExecutor:
             "url":       flow.request.pretty_url,
             "host":      flow.request.pretty_host,
             "method":    flow.request.method,
+            "severity":  severity,
             "msg":       msg,
             "ts":        time.time(),
         })
         # Also write to dedicated alerts file
         try:
             with open(_ALERT_FILE, "a", encoding="utf-8") as af:
-                af.write(json.dumps({"ts": time.time(), "msg": msg}) + "\n")
+                af.write(json.dumps({"ts": time.time(), "severity": severity, "msg": msg}) + "\n")
         except Exception:
             pass
 

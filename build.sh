@@ -64,6 +64,9 @@ LIBS=(
 echo "[*] Compiling SQLite3 (C library)..."
 gcc -O2 -c "$SRC_SQLITE" -o "$OBJ_SQLITE"
 
+echo "[*] Compiling Windows Resources (UAC Administrator Manifest)..."
+windres resources.rc -O coff -o resources.o
+
 echo "[*] Building NetSense+ (ImGui Version)..."
 g++ "${FLAGS[@]}" \
     "$SRC_MAIN" \
@@ -78,6 +81,7 @@ g++ "${FLAGS[@]}" \
     "$SRC_BACKEND" \
     "$SRC_UTILS" \
     "$OBJ_SQLITE" \
+    resources.o \
     "$SRC_RULES" \
     $SRC_UI   \
     $SRC_IMGUI \
@@ -85,7 +89,7 @@ g++ "${FLAGS[@]}" \
     -o "$OUTPUT"
 
 echo "[+] Build successful: $OUTPUT"
-rm -f "$OBJ_SQLITE"
+rm -f "$OBJ_SQLITE" resources.o
 
 # ── Copy runtime files into release/ ───────────────────────
 echo "[*] Copying proxy runtime files to ${RELEASE_DIR}/proxy/ ..."
