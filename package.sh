@@ -25,6 +25,15 @@ else
     exit 1
 fi
 
+echo "[*] Compiling Certificate Uninstaller..."
+g++ uninstall_certificate.cpp -o release/uninstall_certificate.exe -O3 -mwindows -static -static-libgcc -static-libstdc++
+if [ $? -eq 0 ]; then
+    echo "[+] uninstall_certificate.exe created in release folder."
+else
+    echo "[-] Failed to compile uninstaller!"
+fi
+
+
 # Download and bundle standalone mitmproxy (Includes Python inside!)
 if [ ! -f "release/mitmdump.exe" ]; then
     echo "[*] Downloading standalone mitmproxy (Python bundled)..."
